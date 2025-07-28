@@ -25,4 +25,8 @@ app.get("/api/secret/:id", (req, res) => {
   }
 });
 
-app.listen(3001, () => console.log("Secret API on http://localhost:3001"));
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(`Secret API läuft auf Port ${port}`);
+});
+
