@@ -4,7 +4,9 @@
   "type": "module",
   "description": "",
   "main": "index.js",
-  "engines": { "node": ">=22.14.0" },
+  "engines": {
+    "node": ">=22.14.0"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon index.js",
@@ -14,6 +16,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@azure/cosmos": "^4.5.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.0",
     "express": "^5.1.0",
