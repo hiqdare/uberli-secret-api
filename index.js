@@ -85,6 +85,6 @@ app.get("/api/secret/:id", async (req, res) => {
   } catch (e) {
     if (e.code === 404) return res.status(404).json({ error: "Not found or already retrieved." });
     console.error('cosmos read/delete/patch failed', e);
-    // Falls Fehler nach dem res.json passiert, ist die Response schon raus – ok.
+
   }
 });
