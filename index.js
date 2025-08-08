@@ -3,6 +3,12 @@ import cors from "cors";
 import { v4 as uuidv4 } from "uuid";
 import { secrets, stats } from './cosmos.js';
 
+console.log('ENV-CHECK', {
+  COSMOS_ENDPOINT: process.env.COSMOS_ENDPOINT,
+  COSMOS_KEY: !!process.env.COSMOS_KEY,          // nicht den Key selbst loggen!
+  COSMOS_DB: process.env.COSMOS_DB
+});
+
 const app = express();
 app.set('trust proxy', true); // richtige Client-IP aus x-forwarded-for
 app.use(express.json());
