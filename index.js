@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { v4 as uuidv4 } from "uuid";
-import { secrets, stats } from './cosmos.js';
+import { getContainers } from './cosmos.js';
 
 console.log('ENV-CHECK', {
   COSMOS_ENDPOINT: process.env.COSMOS_ENDPOINT,
@@ -46,6 +46,8 @@ app.post("/api/secret", async (req, res) => {
     metaCreate: null,
     metaRead:   null
   };
+
+  const { secrets, stats } = await getContainers();
 
   try {
     await Promise.all([
@@ -94,3 +96,27 @@ app.get("/api/secret/:id", async (req, res) => {
 
   }
 });
+
+// Health ohne DB (für App Service Health Check)
+app.get("/healthz", (_req, res) => res.status(200).send("ok"));
+
+// Optional: Readiness mit DB
+app.get("/readyz", async (_req, res) => {
+  try {
+    // leichte DB-Operation, wenn du willst:
+    // const { resources } = await secrets.items.query('SELECT VALUE COUNT(1) FROM c').fetchAll();
+    res.status(200).send("ready");
+  } catch {
+    res.status(503).send("db-not-ready");
+  }
+});
+
+// >>> WICHTIG: Server starten (PORT aus ENV)
+const port = process.env.PORT ? Number(process.env.PORT) : 8080;
+app.listen(port, () => {
+  console.log(`api up on :${port}`);
+});
+
+// harte Crashes sichtbar loggen
+process.on("unhandledRejection", (r) => console.error("UNHANDLED_REJECTION", r));
+process.on("uncaughtException", (e) => console.error("UNCAUGHT_EXCEPTION", e));

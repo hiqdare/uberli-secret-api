@@ -8,15 +8,42 @@ const databaseId = process.env.COSMOS_DB || 'secretstore';
 const cSecretsId = process.env.COSMOS_CONTAINER_SECRETS || 'secrets';
 const cStatsId   = process.env.COSMOS_CONTAINER_STATS   || 'stats';
 
-if (!endpoint || !key) {
-  throw new Error('COSMOS_ENDPOINT / COSMOS_KEY missing');
+let _client, _database, _secrets, _stats;
+
+function getClient() {
+  if (!_client) {
+    if (!endpoint || !key) {
+      // NICHT werfen – erst bei DB-Zugriff fehlschlagen, damit /healthz nicht stirbt
+      console.error('Cosmos ENV missing (COSMOS_ENDPOINT / COSMOS_KEY)');
+    }
+    _client = new CosmosClient({ endpoint, key });
+  }
+  return _client;
 }
 
-const client = new CosmosClient({ endpoint, key });
+export async function getContainers() {
+  if (_secrets && _stats) return { secrets: _secrets, stats: _stats };
 
-// DB & Container referenzen (wir gehen davon aus, dass du sie im Portal angelegt hast)
-const database       = client.database(databaseId);
-const secrets        = database.container(cSecretsId); // TTL im Portal aktiv
-const stats          = database.container(cStatsId);   // TTL aus
+  const client = getClient();
+  // Falls ENV fehlt: sauberer Fehler für Aufrufer
+  if (!endpoint || !key) throw new Error('Cosmos not configured');
 
-export { client, database, secrets, stats };
+  const { database } = await client.databases.createIfNotExists({ id: databaseId });
+  _database = database;
+
+  // WICHTIG: nur beim ersten Mal erstellen; PartitionKey /id (zu deinem Code passend)
+  const { container: secrets } = await database.containers.createIfNotExists({
+    id: cSecretsId,
+    partitionKey: { paths: ['/id'] },
+    defaultTtl: -1 // Container-Default TTL: -1 = aus; sonst Sekunden angeben
+  });
+  const { container: stats } = await database.containers.createIfNotExists({
+    id: cStatsId,
+    partitionKey: { paths: ['/id'] },
+    defaultTtl: -1
+  });
+
+  _secrets = secrets;
+  _stats   = stats;
+  return { secrets, stats };
+}
