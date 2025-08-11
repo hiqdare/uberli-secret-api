@@ -1,13 +1,14 @@
 import express from "express";
 import cors from "cors";
 import { v4 as uuidv4 } from "uuid";
-import { getContainers } from './cosmos.js';
+import { getContainers } from './cosmos';
+import { mountDocs } from "./swagger";
+import { corsMiddleware } from "./cors-setup";
+app.use(corsMiddleware);
+app.options("*", corsMiddleware); // explizite Preflight-Unterstützung
 
-console.log('ENV-CHECK', {
-  COSMOS_ENDPOINT: process.env.COSMOS_ENDPOINT,
-  COSMOS_KEY: !!process.env.COSMOS_KEY,          // nicht den Key selbst loggen!
-  COSMOS_DB: process.env.COSMOS_DB
-});
+mountDocs(app);
+
 
 const app = express();
 app.set('trust proxy', true); // richtige Client-IP aus x-forwarded-for
