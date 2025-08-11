@@ -63,39 +63,28 @@ app.post("/api/secret", async (req, res) => {
 
 app.get("/api/secret/:id", async (req, res) => {
   const { id } = req.params;
-
   try {
-    // 1) Secret holen
+    const { secrets, stats } = await getContainers(); // lazy init
     const { resource: s } = await secrets.item(id, id).read();
     if (!s) return res.status(404).json({ error: "Not found or already retrieved." });
 
-    // Optional: harte Ablaufprüfung, falls du expiresAt im secrets-Dokument führst
-    // if (s.expiresAt && Date.now() > s.expiresAt) { ... }
-
-    // 2) Value an Client senden
+    // 2) sofort antworten
     res.json({ value: s.value });
 
-    // 3) Danach löschen (Einmaligkeit). TTL würde es zwar auch löschen,
-    //    aber so ist das Secret sofort weg.
-    secrets.item(id, id).delete().catch(() => {});
+    // 3) cleanup nebenläufig
+    secrets.item(id, id).delete().catch(err => console.error("delete failed", err));
+    stats.item(id, id).patch([{ op: "add", path: "/retrievedAt", value: Date.now() }])
+      .catch(err => console.error("stats patch failed", err));
 
-    // 4) stats aktualisieren (retrievedAt setzen; metaRead kommt später)
-    const { resource: st } = await stats.item(id, id).read().catch(() => ({ resource: null }));
-    const patch = [
-      { op: 'add', path: '/retrievedAt', value: Date.now() }
-    ];
-    if (st) {
-      await stats.item(id, id).patch(patch).catch(() => {});
-    } else {
-      // Falls stats-Dokument wider Erwarten fehlt: neu anlegen ohne value
-      await stats.items.create({ id, createdAt: null, retrievedAt: Date.now(), expiresAt: null });
-    }
   } catch (e) {
-    if (e.code === 404) return res.status(404).json({ error: "Not found or already retrieved." });
-    console.error('cosmos read/delete/patch failed', e);
-
+    if (e.code === 404) {
+      return res.status(404).json({ error: "Not found or already retrieved." });
+    }
+    console.error("cosmos read failed", e);
+    return res.status(500).json({ error: "read failed" }); // <-- wichtig: immer antworten
   }
 });
+
 
 // Health ohne DB (für App Service Health Check)
 app.get("/healthz", (_req, res) => res.status(200).send("ok"));
@@ -116,6 +105,12 @@ const port = process.env.PORT ? Number(process.env.PORT) : 8080;
 app.listen(port, () => {
   console.log(`api up on :${port}`);
 });
+
+app.use((err, _req, res, _next) => {
+  console.error("ERR", err);
+  res.status(500).json({ error: "internal_error" });
+});
+
 
 // harte Crashes sichtbar loggen
 process.on("unhandledRejection", (r) => console.error("UNHANDLED_REJECTION", r));

@@ -16,7 +16,11 @@ function getClient() {
       // NICHT werfen – erst bei DB-Zugriff fehlschlagen, damit /healthz nicht stirbt
       console.error('Cosmos ENV missing (COSMOS_ENDPOINT / COSMOS_KEY)');
     }
-    _client = new CosmosClient({ endpoint, key });
+    _client = new CosmosClient({
+      endpoint,
+      key,
+      connectionPolicy: { preferredLocations: ['Switzerland North'] }
+    });
   }
   return _client;
 }
