@@ -1,16 +1,16 @@
 import express from "express";
 import cors from "cors";
 import { v4 as uuidv4 } from "uuid";
-import { getContainers } from './cosmos';
-import { mountDocs } from "./swagger";
-import { corsMiddleware } from "./cors-setup";
+import { getContainers } from './cosmos.js';
+import { mountDocs } from "./swagger.js";
+import { corsMiddleware } from "./cors-setup.js";
+const app = express();
+
 app.use(corsMiddleware);
 app.options("*", corsMiddleware); // explizite Preflight-Unterstützung
 
 mountDocs(app);
 
-
-const app = express();
 app.set('trust proxy', true); // richtige Client-IP aus x-forwarded-for
 app.use(express.json());
 
