@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: Überli Secret API
+  title: uberli Secret API
   version: 1.0.0
   description: |
     API zum sicheren Speichern und einmaligen Abrufen von Geheimnissen.
@@ -141,3 +141,11 @@ components:
         error:
           type: string
           example: "Not found or already retrieved."
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |
+        Optionaler API-Key-Header. Falls eure API später abgesichert wird,
+        hier den Key im Header `X-API-Key` mitsenden.

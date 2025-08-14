@@ -10,7 +10,6 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json());
 app.use(corsMiddleware);
-app.options("*", corsMiddleware);
 
 app.get("/healthz", (_req: Request, res: Response) => res.status(200).send("ok"));
 

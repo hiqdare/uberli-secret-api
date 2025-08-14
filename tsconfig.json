@@ -18,6 +18,7 @@
     "declarationMap": false,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
+    "allowSyntheticDefaultImports": true,
 
     "types": ["node"]
   },
