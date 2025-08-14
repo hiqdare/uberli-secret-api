@@ -1,53 +1,66 @@
-// cosmos.js
-import { CosmosClient } from '@azure/cosmos';
-import 'dotenv/config';
+// cosmos.ts
+import { CosmosClient, type Container, type Database } from "@azure/cosmos";
 
-const endpoint   = process.env.COSMOS_ENDPOINT;
-const key        = process.env.COSMOS_KEY;
-const databaseId = process.env.COSMOS_DB || 'secretstore';
-const cSecretsId = process.env.COSMOS_CONTAINER_SECRETS || 'secrets';
-const cStatsId   = process.env.COSMOS_CONTAINER_STATS   || 'stats';
-
-let _client, _database, _secrets, _stats;
-
-function getClient() {
-  if (!_client) {
-    if (!endpoint || !key) {
-      // NICHT werfen – erst bei DB-Zugriff fehlschlagen, damit /healthz nicht stirbt
-      console.error('Cosmos ENV missing (COSMOS_ENDPOINT / COSMOS_KEY)');
-    }
-    _client = new CosmosClient({
-      endpoint,
-      key,
-      connectionPolicy: { preferredLocations: ['Switzerland North'] }
-    });
+// ---- sauber getypte Config holen (keine undefineds mehr) --------------------
+function getCosmosConfig(): {
+  endpoint: string;
+  key: string;
+  databaseId: string;
+  secretsId: string;
+  statsId: string;
+} {
+  const endpoint = process.env.COSMOS_ENDPOINT;
+  const key = process.env.COSMOS_KEY;
+  if (!endpoint || !key) {
+    throw new Error("Cosmos not configured (COSMOS_ENDPOINT/COSMOS_KEY missing)");
   }
+  return {
+    endpoint,
+    key,
+    databaseId: process.env.COSMOS_DB || "secretstore",
+    secretsId: process.env.COSMOS_CONTAINER_SECRETS || "secrets",
+    statsId: process.env.COSMOS_CONTAINER_STATS || "stats",
+  };
+}
+
+// ---- Caches strikt typisiert ------------------------------------------------
+let _client: CosmosClient | null = null;
+let _database: Database | null = null;
+let _secrets: Container | null = null;
+let _stats: Container | null = null;
+
+function getClient(): CosmosClient {
+  if (_client) return _client;
+  const { endpoint, key } = getCosmosConfig();
+  _client = new CosmosClient({
+    endpoint,
+    key,
+    connectionPolicy: { preferredLocations: ["Switzerland North"] },
+  });
   return _client;
 }
 
-export async function getContainers() {
+export async function getContainers(): Promise<{ secrets: Container; stats: Container }> {
   if (_secrets && _stats) return { secrets: _secrets, stats: _stats };
 
+  const { databaseId, secretsId, statsId } = getCosmosConfig();
   const client = getClient();
-  // Falls ENV fehlt: sauberer Fehler für Aufrufer
-  if (!endpoint || !key) throw new Error('Cosmos not configured');
 
   const { database } = await client.databases.createIfNotExists({ id: databaseId });
   _database = database;
 
-  // WICHTIG: nur beim ersten Mal erstellen; PartitionKey /id (zu deinem Code passend)
   const { container: secrets } = await database.containers.createIfNotExists({
-    id: cSecretsId,
-    partitionKey: { paths: ['/id'] },
-    defaultTtl: -1 // Container-Default TTL: -1 = aus; sonst Sekunden angeben
+    id: secretsId,
+    partitionKey: { paths: ["/id"] },
+    defaultTtl: -1,
   });
   const { container: stats } = await database.containers.createIfNotExists({
-    id: cStatsId,
-    partitionKey: { paths: ['/id'] },
-    defaultTtl: -1
+    id: statsId,
+    partitionKey: { paths: ["/id"] },
+    defaultTtl: -1,
   });
 
   _secrets = secrets;
-  _stats   = stats;
+  _stats = stats;
   return { secrets, stats };
 }

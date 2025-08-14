@@ -1,0 +1,143 @@
+openapi: 3.0.3
+info:
+  title: Überli Secret API
+  version: 1.0.0
+  description: |
+    API zum sicheren Speichern und einmaligen Abrufen von Geheimnissen.
+    **Hinweis**: Der Wert (`value`) ist **clientseitig verschlüsselt**.
+    Ein abgerufenes Secret wird unmittelbar gelöscht (One‑Time Read).
+servers:
+  - url: https://api.uberli.ch
+    description: Production
+
+tags:
+  - name: secret
+    description: Secret erstellen und einmalig abrufen
+  - name: health
+    description: Healthchecks
+
+paths:
+  /healthz:
+    get:
+      tags: [health]
+      summary: Healthcheck (ohne DB)
+      responses:
+        '200':
+          description: OK (Service läuft)
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: ok
+
+  /api/secret:
+    post:
+      tags: [secret]
+      summary: Secret speichern
+      description: |
+        Speichert ein neues Secret-Dokument. Der Payload **muss bereits verschlüsselt** sein.
+        Optional kann eine TTL in Sekunden übergeben werden. Ist eine TTL gesetzt, löscht Cosmos das Dokument automatisch nach Ablauf.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecretCreateRequest'
+            examples:
+              simple:
+                value:
+                  value: "ENC::<ciphertext>"
+                  ttlSeconds: 120
+      responses:
+        '201':
+          description: Secret erstellt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretIdResponse'
+              examples:
+                created:
+                  value:
+                    id: "7f3a9c3e-9a5a-4b9f-9c7c-8d5b5f1e2b10"
+        '400':
+          description: Ungültiger Request (z. B. `value` fehlt)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Interner Fehler beim Speichern
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/secret/{id}:
+    get:
+      tags: [secret]
+      summary: Secret einmalig abrufen
+      description: |
+        Liest das Secret mit der angegebenen `id` und **löscht es sofort** danach.
+        Beim zweiten Abruf (oder wenn bereits abgelaufen/nicht vorhanden) wird **404** zurückgegeben.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: UUID des Secrets
+      responses:
+        '200':
+          description: Secret gefunden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretValueResponse'
+              examples:
+                ok:
+                  value:
+                    value: "ENC::<ciphertext>"
+        '404':
+          description: Nicht gefunden oder bereits abgerufen/abgelaufen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Interner Fehler beim Lesen/Löschen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    SecretCreateRequest:
+      type: object
+      required: [value]
+      properties:
+        value:
+            type: string
+            description: Clientseitig verschlüsselter Wert
+        ttlSeconds:
+            type: integer
+            minimum: 60
+            description: Optional. Lebensdauer in Sekunden. Mindestwert 60.
+    SecretIdResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+    SecretValueResponse:
+      type: object
+      properties:
+        value:
+          type: string
+          description: Clientseitig verschlüsselter Wert (Original wird danach serverseitig gelöscht)
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Not found or already retrieved."
