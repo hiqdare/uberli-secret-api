@@ -4,9 +4,18 @@ import crypto from "node:crypto";
 import { getContainers } from "./cosmos.js";
 import { mountDocs } from "./swagger.js";
 import { corsMiddleware } from "./cors-setup.js";
+import rateLimit from "express-rate-limit";
 import 'dotenv/config';
 
 const app = express();
+
+const readSecretLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 app.set("trust proxy", true);
 app.use(express.json());
 app.use(corsMiddleware);
@@ -42,27 +51,34 @@ app.post("/api/secret", async (req: Request, res: Response, next: NextFunction) 
     next(e);
   }
 });
-
-app.get("/api/secret/:id", async (req: Request<{ id: string }>, res: Response) => {
+app.get("/api/secret/:id", readSecretLimiter, async (req: Request<{ id: string }>, res: Response) => {
   const { id } = req.params;
   try {
     const { secrets, stats } = await getContainers();
-    const { resource: s } = await secrets.item(id, id).read();
-    if (!s) return res.status(404).json({ error: "Not found or already retrieved." });
 
-    res.json({ value: (s as any).value }); // sofort antworten
+    const { resource: s } = await secrets.item(id, id).read().catch((e: any) => {
+      if (e?.code !== 404) throw e; // echte Fehler weiterwerfen
+      return { resource: null as any };
+    });
 
+    if (!s) {
+      const { resource: st } = await stats.item(id, id).read().catch(() => ({ resource: null }));
+      if (st?.retrievedAt) {
+        console.info("secret lookup: already_retrieved", { id });
+      } else {
+        console.info("secret lookup: not_found_or_expired", { id });
+      }
+      return res.status(404).json({ error: "Not found." });
+    }
+
+    res.json({ value: (s as any).value });
     // Nebenläufige Aufräumer
     secrets.item(id, id).delete().catch((err: unknown) => console.error("delete failed", err));
     stats
       .item(id, id)
       .patch([{ op: "add", path: "/retrievedAt", value: Date.now() }])
       .catch((err: unknown) => console.error("stats patch failed", err));
-  } catch (e: unknown) {
-    const err = e as { code?: number | string };
-    if (err?.code === 404) {
-      return res.status(404).json({ error: "Not found or already retrieved." });
-    }
+  } catch (e) {
     console.error("cosmos read failed", e);
     return res.status(500).json({ error: "read failed" });
   }
